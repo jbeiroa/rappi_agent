@@ -1,6 +1,7 @@
 import dash
 import dash_bootstrap_components as dbc
 from dash import html, dcc, Input, Output, State, callback
+from dash_chat import ChatComponent
 import asyncio
 import os
 import json
@@ -60,47 +61,98 @@ runner = Runner(
 # --- Dash App Setup ---
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-app.layout = dbc.Container([
-    dbc.Row([
-        dbc.Col(html.H1("Inteligencia Operacional Rappi", className="text-center my-4"), width=12)
-    ]),
-    dbc.Row([
-        # Left Column: Chat
-        dbc.Col([
-            dbc.Card([
-                dbc.CardHeader("Chatbot de Operaciones"),
-                dbc.CardBody([
-                    html.Div(id="chat-history", style={
-                        "height": "600px", 
-                        "overflowY": "auto", 
-                        "display": "flex", 
-                        "flexDirection": "column",
-                        "gap": "10px",
-                        "padding": "10px"
-                    }),
-                ]),
-                dbc.CardFooter(
-                    dbc.InputGroup([
-                        dbc.Input(id="user-input", placeholder="Pregunta sobre métricas de Rappi...", type="text"),
-                        dbc.Button("Enviar", id="send-btn", color="primary", n_clicks=0),
-                    ])
-                )
-            ])
-        ], width=5),
+# Inject global CSS to handle full-height and non-scrollable behavior
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+        <style>
+            body, html {
+                height: 100vh;
+                margin: 0;
+                overflow: hidden;
+                background-color: #f8f9fa;
+            }
+            .main-container {
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+                padding: 20px;
+            }
+            .content-row {
+                flex-grow: 1;
+                overflow: hidden;
+                display: flex;
+            }
+            .full-height-card {
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+            }
+            .card-body-scroll {
+                flex-grow: 1;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                padding: 0;
+            }
+            /* Override ChatComponent to take full space */
+            .dash-chat-container {
+                flex-grow: 1;
+                height: 100% !important;
+            }
+        </style>
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+    </body>
+</html>
+'''
 
-        # Right Column: Visualizations
-        dbc.Col([
-            dbc.Card([
-                dbc.CardHeader("Insights y Visualizaciones"),
-                dbc.CardBody([
-                    html.Div(id="viz-container", children=[
-                        html.P("Los gráficos aparecerán aquí cuando los solicites.", className="text-muted text-center")
-                    ])
-                ])
-            ])
-        ], width=7)
-    ])
-], fluid=True)
+app.layout = html.Div([
+    dbc.Container([
+        dbc.Row([
+            dbc.Col(html.H1("Inteligencia Operacional Rappi", className="text-center mb-4"), width=12)
+        ], style={"flex-shrink": 0}),
+        
+        dbc.Row([
+            # Left Column: Chat
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardHeader("Chatbot de Operaciones"),
+                    dbc.CardBody([
+                        ChatComponent(
+                            id="chat-component",
+                            messages=[],
+                            fill_height=True
+                        )
+                    ], className="card-body-scroll")
+                ], className="full-height-card shadow-sm")
+            ], width=7, style={"height": "100%"}),
+
+            # Right Column: Visualizations
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardHeader("Insights y Visualizaciones"),
+                    dbc.CardBody([
+                        html.Div(id="viz-container", children=[
+                            html.P("Los gráficos aparecerán aquí cuando los solicites.", className="text-muted text-center")
+                        ], style={"height": "100%", "overflowY": "auto"})
+                    ], className="card-body-scroll")
+                ], className="full-height-card shadow-sm")
+            ], width=5, style={"height": "100%"})
+        ], className="content-row", style={"flex-grow": 1})
+    ], fluid=True, className="main-container")
+], style={"height": "100vh"})
 
 def parse_chart_spec_from_text(text):
     """Fallback: extraction of JSON chart spec from agent markdown text or raw text."""
@@ -219,33 +271,23 @@ def create_plotly_figure(spec):
         return None
 
 @app.callback(
-    [Output("chat-history", "children"),
-     Output("viz-container", "children"),
-     Output("user-input", "value")],
-    [Input("send-btn", "n_clicks"),
-     Input("user-input", "n_submit")],
-    [State("user-input", "value"),
-     State("chat-history", "children"),
+    [Output("chat-component", "messages"),
+     Output("viz-container", "children")],
+    Input("chat-component", "new_message"),
+    [State("chat-component", "messages"),
      State("viz-container", "children")],
     prevent_initial_call=True
 )
-def update_chat(n_clicks, n_submit, user_query, current_history, current_viz):
+def update_chat(new_message, current_messages, current_viz_list):
+    if not new_message:
+        return current_messages, current_viz_list
+
+    user_query = new_message.get("content")
     if not user_query:
-        return current_history, current_viz, ""
+        return current_messages, current_viz_list
 
     # 1. Add User Message to History
-    user_msg = html.Div(user_query, style={
-        "alignSelf": "flex-end",
-        "backgroundColor": "#e9ecef",
-        "padding": "10px",
-        "borderRadius": "10px",
-        "maxWidth": "80%"
-    })
-    
-    if current_history is None:
-        current_history = []
-    
-    new_history = current_history + [user_msg]
+    new_history = current_messages + [new_message]
     logger.info(f"USER QUERY: {user_query}")
 
     # 2. Call Agent (Async run)
@@ -273,12 +315,9 @@ def update_chat(n_clicks, n_submit, user_query, current_history, current_viz):
                 
                 if tool_call:
                     tool_name = tool_call.name
-                    # Robust argument capture: convert object to dict if necessary
                     args = tool_call.args
                     if not isinstance(args, dict):
-                        # Attempt to extract all attributes as a dict
                         try:
-                            # If it's a Pydantic object or similar, it might have a .model_dump() or similar
                             if hasattr(args, 'model_dump'):
                                 args = args.model_dump()
                             else:
@@ -290,18 +329,15 @@ def update_chat(n_clicks, n_submit, user_query, current_history, current_viz):
                     
                     if tool_name == "generate_chart_spec":
                         logger.info("Captured chart specification from tool call.")
-                        # Save the whole args object for flexible mapping in create_plotly_figure
                         captured_chart_spec = args
                     elif tool_name == "run_pandas_query":
                         query_code = args.get("python_code") if isinstance(args, dict) else ""
                         if query_code:
                             logger.info(f"PANDAS QUERY: {query_code}")
 
-                # Accumulate Text
                 if hasattr(event, 'content') and event.content:
                     for part in event.content.parts:
                         if hasattr(part, 'text') and part.text:
-                            # Add a newline if we are switching agents or chunks to prevent word merging
                             if full_text and not full_text.endswith(('\n', ' ')):
                                 full_text += "\n\n"
                             full_text += part.text
@@ -315,19 +351,28 @@ def update_chat(n_clicks, n_submit, user_query, current_history, current_viz):
     agent_response_text, chart_spec = asyncio.run(get_agent_response())
 
     # 3. Handle Chart Spec
-    # Prioritize captured spec from tool call, fallback to manual parsing
+    # Initialize viz list if empty or contains only the placeholder
+    if not isinstance(current_viz_list, list) or (len(current_viz_list) == 1 and hasattr(current_viz_list[0], 'className') and 'text-muted' in current_viz_list[0].className):
+        current_viz_list = []
+
     if not chart_spec:
         chart_spec = parse_chart_spec_from_text(agent_response_text)
     
     if chart_spec:
-        logger.info(f"Rendering chart...")
+        logger.info(f"Creating chart for side panel...")
         fig = create_plotly_figure(chart_spec)
         if fig:
-            current_viz = dcc.Graph(figure=fig)
+            # Create a new card for the plot to keep them distinct in the scrollable list
+            new_plot_card = dbc.Card([
+                dbc.CardBody([
+                    dcc.Graph(figure=fig, config={'displayModeBar': False})
+                ])
+            ], className="mb-3 shadow-sm")
+            # Prepend the new plot to keep the newest on top (carrousel-like behavior)
+            current_viz_list = [new_plot_card] + current_viz_list
 
-    # 4. Final UI Cleanup (Remove raw JSON and internal tags)
+    # 4. Final UI Cleanup
     try:
-        # 1. Remove JSON blocks (raw or markdown-wrapped)
         json_match = re.search(r'\{[^{}]*"(chart_type|type)"[^{}]*\}', agent_response_text, re.DOTALL)
         if json_match:
             agent_response_text = agent_response_text.replace(json_match.group(0), "").strip()
@@ -337,32 +382,23 @@ def update_chat(n_clicks, n_submit, user_query, current_history, current_viz):
             if block_match:
                 agent_response_text = agent_response_text.replace(block_match.group(0), "").strip()
         
-        # 2. Remove Internal Recommendation Tags (e.g., RECOMENDACIÓN_VISUALIZACIÓN: line)
-        # Using a precise regex to avoid eating following words (like "Aquí")
         tag_match = re.search(r'RECOMENDACIÓN_VISUALIZACIÓN:\s*\b(line|bar|scatter)\b', agent_response_text, re.IGNORECASE)
         if tag_match:
             agent_response_text = agent_response_text.replace(tag_match.group(0), "").strip()
         
-        # 3. Clean up any resulting double line breaks or trailing whitespace
         agent_response_text = re.sub(r'\n{3,}', '\n\n', agent_response_text).strip()
     except Exception as e:
         logger.warning(f"Failed to clean agent response text: {e}")
 
-    # 5. Add Agent Message to History
-    agent_msg = html.Div(dcc.Markdown(agent_response_text), style={
-        "alignSelf": "flex-start",
-        "backgroundColor": "#007bff",
-        "color": "white",
-        "padding": "10px",
-        "borderRadius": "10px",
-        "maxWidth": "80%"
-    })
-    
-    new_history = new_history + [agent_msg]
+    # 5. Add Agent Text Message to History
+    if agent_response_text:
+        new_history.append({"role": "assistant", "content": agent_response_text})
+    elif not chart_spec:
+        new_history.append({"role": "assistant", "content": "He procesado tu consulta pero no he generado una respuesta textual clara."})
 
-    return new_history, current_viz, ""
+    return new_history, current_viz_list
 
 if __name__ == "__main__":
     logger.info("🚀 Starting Rappi Operations Dashboard...")
     logger.info("👉 Access URL: http://127.0.0.1:8050")
-    app.run(debug=False, port=8050)
+    app.run(debug=True, port=8050)
