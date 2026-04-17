@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "dash>=4.1.0",
     "dash-bootstrap-components>=2.0.4",
+    "dash-chat>=0.3.0",
     "google-adk>=1.31.0",
     "litellm>=1.83.0",
     "openpyxl>=3.1.5",
