@@ -1,13 +1,11 @@
 # src/agents/orchestrator/agent.py
 
-from google.adk.agents import LlmAgent
-from src.agents.orchestrator.prompt import ORCHESTRATOR_INSTRUCTIONS
+from google.adk.agents import SequentialAgent
 from src.agents.analyst.agent import analyst_agent
 from src.agents.visualizer.agent import visualizer_agent
+from src.agents.suggestion.agent import suggestion_agent
 
-orchestrator_agent = LlmAgent(
+orchestrator_agent = SequentialAgent(
     name="rappi_orchestrator",
-    model="gemini-3-flash-preview",
-    instruction=ORCHESTRATOR_INSTRUCTIONS,
-    sub_agents=[analyst_agent, visualizer_agent]
+    sub_agents=[analyst_agent, suggestion_agent, visualizer_agent]
 )

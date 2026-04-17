@@ -110,11 +110,20 @@ def parse_chart_spec_from_text(text):
             json_str = text.split("```json")[1].split("```")[0].strip()
             return json.loads(json_str)
         
-        # Try finding a raw JSON-like block { ... }
-        match = re.search(r'\{[^{}]*"type"[^{}]*\}', text)
+        # Try finding a raw JSON-like block { ... "chart_type": ... }
+        # More flexible regex to find a block containing chart_type or type
+        match = re.search(r'\{[^{}]*"(chart_type|type)"[^{}]*\}', text, re.DOTALL)
         if match:
+            # Attempt to find the full balanced object if nested
             json_str = match.group(0)
-            return json.loads(json_str)
+            try:
+                return json.loads(json_str)
+            except:
+                # If balanced search failed, try to just find the biggest { } block
+                start = text.find('{')
+                end = text.rfind('}')
+                if start != -1 and end != -1:
+                    return json.loads(text[start:end+1])
             
         return None
     except:
@@ -269,13 +278,15 @@ def update_chat(n_clicks, n_submit, user_query, current_history, current_viz):
                     if not isinstance(args, dict):
                         # Attempt to extract all attributes as a dict
                         try:
-                            args = {k: getattr(args, k) for k in dir(args) if not k.startswith('_')}
+                            # If it's a Pydantic object or similar, it might have a .model_dump() or similar
+                            if hasattr(args, 'model_dump'):
+                                args = args.model_dump()
+                            else:
+                                args = {k: getattr(args, k) for k in dir(args) if not k.startswith('_')}
                         except:
                             pass
                     
                     logger.info(f"AGENT TOOL CALL: {tool_name}")
-                    if tool_name != "transfer_to_agent":
-                        logger.debug(f"TOOL ARGS: {args}")
                     
                     if tool_name == "generate_chart_spec":
                         logger.info("Captured chart specification from tool call.")
@@ -290,6 +301,9 @@ def update_chat(n_clicks, n_submit, user_query, current_history, current_viz):
                 if hasattr(event, 'content') and event.content:
                     for part in event.content.parts:
                         if hasattr(part, 'text') and part.text:
+                            # Add a newline if we are switching agents or chunks to prevent word merging
+                            if full_text and not full_text.endswith(('\n', ' ')):
+                                full_text += "\n\n"
                             full_text += part.text
 
         except Exception as e:
@@ -310,16 +324,31 @@ def update_chat(n_clicks, n_submit, user_query, current_history, current_viz):
         fig = create_plotly_figure(chart_spec)
         if fig:
             current_viz = dcc.Graph(figure=fig)
-            # Remove raw JSON block from UI for cleaner experience
-            # We match the specific JSON block to avoid stripping text that just looks like JSON
-            try:
-                match = re.search(r'\{[^{}]*"type"[^{}]*\}', agent_response_text)
-                if match:
-                    agent_response_text = agent_response_text.replace(match.group(0), "").strip()
-            except:
-                pass
-    
-    # 4. Add Agent Message to History
+
+    # 4. Final UI Cleanup (Remove raw JSON and internal tags)
+    try:
+        # 1. Remove JSON blocks (raw or markdown-wrapped)
+        json_match = re.search(r'\{[^{}]*"(chart_type|type)"[^{}]*\}', agent_response_text, re.DOTALL)
+        if json_match:
+            agent_response_text = agent_response_text.replace(json_match.group(0), "").strip()
+        
+        if "```json" in agent_response_text:
+            block_match = re.search(r'```json.*?```', agent_response_text, re.DOTALL)
+            if block_match:
+                agent_response_text = agent_response_text.replace(block_match.group(0), "").strip()
+        
+        # 2. Remove Internal Recommendation Tags (e.g., RECOMENDACIÓN_VISUALIZACIÓN: line)
+        # Using a precise regex to avoid eating following words (like "Aquí")
+        tag_match = re.search(r'RECOMENDACIÓN_VISUALIZACIÓN:\s*\b(line|bar|scatter)\b', agent_response_text, re.IGNORECASE)
+        if tag_match:
+            agent_response_text = agent_response_text.replace(tag_match.group(0), "").strip()
+        
+        # 3. Clean up any resulting double line breaks or trailing whitespace
+        agent_response_text = re.sub(r'\n{3,}', '\n\n', agent_response_text).strip()
+    except Exception as e:
+        logger.warning(f"Failed to clean agent response text: {e}")
+
+    # 5. Add Agent Message to History
     agent_msg = html.Div(dcc.Markdown(agent_response_text), style={
         "alignSelf": "flex-start",
         "backgroundColor": "#007bff",
