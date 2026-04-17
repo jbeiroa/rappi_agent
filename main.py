@@ -141,10 +141,16 @@ def try_parse_natural_language_data(data_str):
 def create_plotly_figure(spec):
     """Transforms a JSON spec into a Plotly figure."""
     try:
+        # Unwrap nested spec if present (sometimes happens with Pydantic tool arguments)
+        if isinstance(spec, dict) and "spec" in spec and len(spec) == 1:
+            spec = spec["spec"]
+
         # Be flexible with key names
         chart_type = spec.get("chart_type") or spec.get("type")
-        data_raw = spec.get("data_summary") or spec.get("data")
+        data_raw = spec.get("data") or spec.get("data_summary")
         title = spec.get("title", "Gráfico de Insight")
+        x_col = spec.get("x_axis")
+        y_cols = spec.get("y_axis")
 
         if not chart_type:
             logger.warning(f"No chart type found in spec: {spec}")
@@ -173,12 +179,26 @@ def create_plotly_figure(spec):
             logger.error(f"Failed to parse data for chart: {data_raw}")
             return None
 
+        # Determine default X and Y if not provided or to ensure numeric consistency
+        if not x_col or x_col not in df.columns:
+            x_col = df.columns[0]
+        
+        # Filter for numeric columns for Y if not explicitly provided or to be safe
+        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+        if not y_cols:
+            y_cols = [c for c in numeric_cols if c != x_col]
+            if not y_cols: # fallback to everything but x
+                y_cols = [c for c in df.columns if c != x_col]
+        else:
+            # Ensure provided y_cols exist in df
+            y_cols = [c for c in y_cols if c in df.columns]
+
         if chart_type == "line":
-            fig = px.line(df, x=df.columns[0], y=df.columns[1:], title=title, markers=True)
+            fig = px.line(df, x=x_col, y=y_cols, title=title, markers=True)
         elif chart_type == "bar":
-            fig = px.bar(df, x=df.columns[0], y=df.columns[1:], title=title)
+            fig = px.bar(df, x=x_col, y=y_cols, title=title)
         elif chart_type == "scatter":
-            fig = px.scatter(df, x=df.columns[0], y=df.columns[1], title=title)
+            fig = px.scatter(df, x=x_col, y=y_cols, title=title)
         else:
             logger.warning(f"Unsupported chart type: {chart_type}")
             return None

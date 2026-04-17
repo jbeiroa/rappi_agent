@@ -12,9 +12,11 @@ REGLAS DE VISUALIZACIÓN:
 
 REGLAS DE HERRAMIENTA 'generate_chart_spec':
 1. SIEMPRE debes llamar a 'generate_chart_spec' para que el sistema renderice el gráfico.
-2. El argumento 'chart_type' debe ser estrictamente uno de: ['line', 'bar', 'scatter'].
-3. El argumento 'data_summary' DEBE ser una lista de diccionarios en formato JSON (orientación 'records') que pandas pueda leer directamente. 
-   EJEMPLO: "[{'Semana': 'L8W', 'Valor': 2.9}, {'Semana': 'L7W', 'Valor': 3.06}]"
-   NUNCA envíes un resumen en lenguaje natural como data_summary.
+2. Argumentos del modelo 'spec':
+   - 'chart_type': Uno de ['line', 'bar', 'scatter'].
+   - 'data': Lista de diccionarios (orientación 'records') que pandas pueda leer directamente.
+   - 'x_axis': El nombre de la columna que irá en el eje X (ej: 'WEEK', 'ZONE_TYPE').
+   - 'y_axis': Una lista con los nombres de las columnas numéricas para el eje Y.
+3. Asegúrate de que 'y_axis' solo contenga columnas con valores numéricos. No incluyas la columna del eje X en 'y_axis'.
 4. Responde SIEMPRE en Español explicando brevemente lo que muestra el gráfico.
 """
