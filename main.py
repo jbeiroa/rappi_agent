@@ -129,10 +129,10 @@ def try_parse_natural_language_data(data_str):
             x_str = parts[0].replace('Semanas:', '').strip()
             y_str = parts[1].strip()
             
-            x_vals = [v.strip() for v in x_str.split(',')]
-            y_vals = [float(v.strip()) for v in y_str.split(',')]
+            x_vals = [v.strip() for v in x_str.split(',') if v.strip()]
+            y_vals = [float(v.strip()) for v in y_str.split(',') if v.strip()]
             
-            if len(x_vals) == len(y_vals):
+            if len(x_vals) == len(y_vals) and len(x_vals) > 0:
                 return pd.DataFrame({"Semana": x_vals, "Valor": y_vals})
         return None
     except:
