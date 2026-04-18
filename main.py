@@ -60,6 +60,7 @@ runner = Runner(
 
 # --- Dash App Setup ---
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app.title = "Rappi Intelligent Operations"
 
 # Inject global CSS to handle full-height and non-scrollable behavior
 app.index_string = '''
@@ -172,12 +173,17 @@ app.index_string = '''
 </html>
 '''
 
+from src.report_generator import generate_executive_report_html
+
 app.layout = html.Div([
     dbc.Container([
         # Header Row
         html.Div([
             html.H1("Inteligencia Operacional Rappi", className="header-title"),
-            dbc.Button("Ayuda", id="open-help", className="btn-rappi", size="sm")
+            html.Div([
+                dbc.Button("Reporte Ejecutivo", id="btn-executive-report", className="btn-rappi me-2", size="sm"),
+                dbc.Button("Ayuda", id="open-help", className="btn-rappi", size="sm")
+            ], className="d-flex align-items-center")
         ], className="header-row"),
         
         # Help Offcanvas
@@ -233,10 +239,26 @@ app.layout = html.Div([
             ], width=5, style={"height": "100%"})
         ], className="content-row", style={"flex-grow": 1})
     ], fluid=True, className="main-container"),
-    dcc.Download(id="download-data")
+    dcc.Download(id="download-data"),
+    dcc.Download(id="download-report"),
+    dbc.Spinner(html.Div(id="report-spinner-output"), fullscreen_style={"visibility": "visible", "filter": "blur(2px)"}, fullscreen=True)
 ], style={"height": "100vh"})
 
 # --- Helper Callbacks ---
+@app.callback(
+    Output("download-report", "data"),
+    Input("btn-executive-report", "n_clicks"),
+    prevent_initial_call=True
+)
+def download_executive_report(n):
+    if not n:
+        return dash.no_update
+    
+    # Generate the report (running the async function in a sync wrapper)
+    report_html = asyncio.run(generate_executive_report_html())
+    
+    return dcc.send_string(report_html, filename="Reporte_Ejecutivo_Rappi.html")
+
 @app.callback(
     Output("help-offcanvas", "is_open"),
     Input("open-help", "n_clicks"),

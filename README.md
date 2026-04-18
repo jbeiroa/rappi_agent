@@ -1,30 +1,37 @@
 # Rappi Intelligent Operations Agent 🚀
 
-Este proyecto es un sistema multi-agente de inteligencia artificial diseñado para democratizar el acceso a datos operacionales en Rappi. Permite que equipos de Estrategia, Planeación y Analytics (SP&A) obtengan insights profundos y visualizaciones interactivas utilizando lenguaje natural.
+Este proyecto es un sistema multi-agente de inteligencia artificial diseñado para democratizar el acceso a datos operacionales en Rappi. Permite que equipos de Estrategia, Planeación y Analytics (SP&A) obtengan insights profundos, visualizaciones interactivas y reportes estratégicos utilizando lenguaje natural.
 
 ## 📋 Descripción del Proyecto
-El sistema procesa métricas operacionales complejas (como Lead Penetration, Perfect Orders y Gross Profit UE) distribuidas en 9 países y cientos de zonas. Utiliza una arquitectura jerárquica de agentes para descomponer preguntas de negocio, ejecutar consultas de datos en tiempo real y generar reportes visuales.
+El sistema procesa métricas operacionales complejas distribuidas en 9 países y cientos de zonas. Utiliza una arquitectura jerárquica de agentes y un pipeline de Machine Learning para detectar anomalías, tendencias de deterioro y generar reportes ejecutivos automatizados.
 
 ## 🏗️ Arquitectura del Sistema (Multi-Agent System)
 Desarrollado con el **Google Agent Development Kit (ADK)**, el sistema se divide en:
 
-1.  **Root Agent (Gateway)**: Punto de entrada que maneja la interacción con el usuario, memoria conversacional y reglas de seguridad (guardrails).
-2.  **Orchestrator Agent**: El cerebro del sistema. Descompone consultas complejas y delega tareas a agentes especializados.
-3.  **Data Analyst Agent**: Especialista en Pandas que traduce preguntas de negocio a consultas técnicas sobre los datasets.
-4.  **Data Visualizer Agent**: Experto en Plotly que genera especificaciones de gráficos (Line, Bar, Scatter) basadas en los resultados del analista.
+1.  **Root Agent (Gateway)**: Maneja la interacción inicial, memoria conversacional y reglas de seguridad.
+2.  **Orchestrator Agent**: El cerebro del sistema. Descompone consultas complejas y delega tareas.
+3.  **Data Analyst Agent**: Especialista en Pandas que ejecuta consultas enriquecidas con flags de anomalías y cambios WoW.
+4.  **Data Visualizer Agent**: Experto en Plotly que genera especificaciones de gráficos interactivos.
+5.  **Report Agent**: Consultor estratégico que genera narrativas de negocio para el reporte ejecutivo.
+
+## 🧠 Inteligencia de Datos y ML
+El sistema incluye un pipeline avanzado de procesamiento:
+- **Detección de Anomalías**: Utiliza `IsolationForest` (Scikit-Learn) para detectar comportamientos inusuales en las métricas.
+- **Seguimiento con MLflow**: Todos los modelos y métricas se registran localmente en una base de datos SQLite (`mlflow.db`).
+- **Análisis de Tendencias**: Identifica automáticamente deterioros constantes (3+ semanas) y cambios WoW significativos (>10%).
 
 ## 🛠️ Stack Tecnológico
 - **Lenguaje**: Python 3.12+
 - **Gestión de Dependencias**: `uv`
 - **Framework de Agentes**: Google ADK (`google-adk`)
-- **Orquestación de LLM**: `LiteLLM` (soporte para Gemini 2.0/3.0 y OpenAI)
-- **Interfaz de Usuario**: `Plotly Dash` con componentes Bootstrap.
-- **Análisis de Datos**: `Pandas`, `NumPy`.
+- **Modelos**: Gemini 3 Flash via Google ADK.
+- **ML & Data**: `Pandas`, `Scikit-Learn`, `MLflow`.
+- **UI/UX**: `Plotly Dash` con Rappi Branding y componentes interactivos.
 
 ## 🚀 Cómo Ejecutar el Proyecto
 
 ### 1. Configuración del Entorno
-Asegúrate de tener `uv` instalado. Luego, clona el repositorio y configura las variables de entorno:
+Asegúrate de tener `uv` instalado. Luego, clona el repositorio:
 
 ```bash
 # Instalar dependencias
@@ -32,29 +39,29 @@ uv sync
 
 # Configurar claves de API
 cp .env.example .env
-# Edita el archivo .env con tu GEMINI_API_KEY u OPENAI_API_KEY
+# Edita el archivo .env con tu GEMINI_API_KEY
 ```
 
 ### 2. Ejecutar la Interfaz (Dashboard)
 Para iniciar el chatbot interactivo y el panel de visualización:
 
 ```bash
-PYTHONPATH=. uv run python main.py
+uv run python main.py
 ```
 Luego abre tu navegador en `http://127.0.0.1:8050`.
 
-### 3. Exploración de Datos (Notebooks)
-Para revisar el análisis exploratorio inicial (EDA) y las respuestas a los escenarios del caso técnico:
+### 3. Revisar el Tracking de MLflow
+Para visualizar los experimentos de detección de anomalías:
 
 ```bash
-uv run jupyter notebook notebooks/exploratory_data_analysis.ipynb
+uv run mlflow ui --backend-store-uri sqlite:///mlflow.db
 ```
 
-## 📊 Capacidades del Bot
-- **Consultas Temporales**: "Muestra la evolución del Gross Profit UE en Chapinero las últimas 8 semanas".
-- **Comparaciones Geográficas**: "Compara el Perfect Order entre zonas Wealthy y Non Wealthy en México".
-- **Análisis Multivariable**: "¿Qué zonas tienen alto Lead Penetration pero bajo Perfect Order?".
-- **Inferencia de Crecimiento**: "Identifica las zonas que más crecen en órdenes y explica por qué".
+## 📊 Capacidades Destacadas
+- **Reporte Ejecutivo**: Generación proactiva de un reporte estratégico en HTML con los 5 insights más críticos y recomendaciones.
+- **Exportación de Datos**: Cada gráfico permite visualizar su tabla de origen y descargar los datos en CSV o JSON.
+- **Centro de Ayuda**: Guía integrada con ejemplos reales de preguntas operacionales.
+- **Branding Rappi**: Interfaz optimizada con la identidad visual y colores de la marca.
 
 ---
 *Este proyecto es parte de un proceso técnico para Rappi.*
