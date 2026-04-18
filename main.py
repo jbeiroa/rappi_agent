@@ -1,6 +1,6 @@
 import dash
 import dash_bootstrap_components as dbc
-from dash import html, dcc, Input, Output, State, callback
+from dash import html, dcc, Input, Output, State, callback, dash_table, ctx, Patch
 from dash_chat import ChatComponent
 import asyncio
 import os
@@ -71,17 +71,40 @@ app.index_string = '''
         {%favicon%}
         {%css%}
         <style>
+            :root {
+                --rappi-red: #f6553f;
+                --rappi-red-dark: #c81c20;
+                --rappi-white: #ffffff;
+                --rappi-light: #f8f9fa;
+            }
             body, html {
                 height: 100vh;
                 margin: 0;
                 overflow: hidden;
-                background-color: #f8f9fa;
+                background-color: var(--rappi-light);
+                font-family: 'Inter', sans-serif;
             }
             .main-container {
                 height: 100vh;
                 display: flex;
                 flex-direction: column;
-                padding: 20px;
+                padding: 15px 20px 20px 20px;
+            }
+            .header-row {
+                background-color: var(--rappi-red);
+                color: white;
+                margin: -15px -20px 15px -20px;
+                padding: 10px 30px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-shrink: 0;
+            }
+            .header-title {
+                margin: 0;
+                font-weight: 700;
+                font-size: 1.5rem;
             }
             .content-row {
                 flex-grow: 1;
@@ -92,6 +115,15 @@ app.index_string = '''
                 height: 100%;
                 display: flex;
                 flex-direction: column;
+                border: none;
+                border-radius: 12px;
+            }
+            .card-header {
+                background-color: white !important;
+                border-bottom: 1px solid #eee !important;
+                font-weight: 600;
+                color: var(--rappi-dark);
+                padding: 15px 20px;
             }
             .card-body-scroll {
                 flex-grow: 1;
@@ -104,6 +136,28 @@ app.index_string = '''
             .dash-chat-container {
                 flex-grow: 1;
                 height: 100% !important;
+            }
+            .btn-rappi {
+                background-color: var(--rappi-red);
+                border-color: var(--rappi-red);
+                color: white;
+                font-weight: 600;
+                border-radius: 8px;
+            }
+            .btn-rappi:hover {
+                background-color: var(--rappi-red-dark);
+                border-color: var(--rappi-red-dark);
+                color: white;
+            }
+            .btn-outline-rappi {
+                color: var(--rappi-red);
+                border-color: var(--rappi-red);
+                font-weight: 600;
+                border-radius: 8px;
+            }
+            .btn-outline-rappi:hover {
+                background-color: var(--rappi-red);
+                color: white;
             }
         </style>
     </head>
@@ -120,9 +174,36 @@ app.index_string = '''
 
 app.layout = html.Div([
     dbc.Container([
-        dbc.Row([
-            dbc.Col(html.H1("Inteligencia Operacional Rappi", className="text-center mb-4"), width=12)
-        ], style={"flex-shrink": 0}),
+        # Header Row
+        html.Div([
+            html.H1("Inteligencia Operacional Rappi", className="header-title"),
+            dbc.Button("Ayuda", id="open-help", className="btn-rappi", size="sm")
+        ], className="header-row"),
+        
+        # Help Offcanvas
+        dbc.Offcanvas(
+            html.Div([
+                html.H4("¿Cómo usar esta aplicación?", className="mb-3"),
+                html.P([
+                    "Este asistente te permite consultar datos operativos de Rappi usando lenguaje natural. ",
+                    "Puedes pedir análisis de tendencias, comparaciones entre verticales o métricas específicas."
+                ]),
+                html.H5("Consejos:", className="mt-4"),
+                html.Ul([
+                    html.Li("Sé específico con los periodos de tiempo (ej. 'últimas 8 semanas')."),
+                    html.Li("Menciona si prefieres un tipo de gráfico (líneas, barras, dispersión)."),
+                    html.Li("Puedes descargar los datos de cualquier gráfico generado usando los botones debajo del mismo.")
+                ]),
+                html.H5("Ejemplos:", className="mt-4"),
+                html.Em("'¿Cómo evolucionó el GMV semana a semana?'"),
+                html.Br(),
+                html.Em("'Métricas de eficiencia de la última semana por país'")
+            ]),
+            id="help-offcanvas",
+            title="Centro de Ayuda",
+            is_open=False,
+            placement="end",
+        ),
         
         dbc.Row([
             # Left Column: Chat
@@ -145,14 +226,83 @@ app.layout = html.Div([
                     dbc.CardHeader("Insights y Visualizaciones"),
                     dbc.CardBody([
                         html.Div(id="viz-container", children=[
-                            html.P("Los gráficos aparecerán aquí cuando los solicites.", className="text-muted text-center")
-                        ], style={"height": "100%", "overflowY": "auto"})
+                            html.P("Los gráficos aparecerán aquí cuando los solicites.", className="text-muted text-center", style={"marginTop": "50%"})
+                        ], style={"height": "100%", "overflowY": "auto", "padding": "20px"})
                     ], className="card-body-scroll")
                 ], className="full-height-card shadow-sm")
             ], width=5, style={"height": "100%"})
         ], className="content-row", style={"flex-grow": 1})
-    ], fluid=True, className="main-container")
+    ], fluid=True, className="main-container"),
+    dcc.Download(id="download-data")
 ], style={"height": "100vh"})
+
+# --- Helper Callbacks ---
+@app.callback(
+    Output("help-offcanvas", "is_open"),
+    Input("open-help", "n_clicks"),
+    [State("help-offcanvas", "is_open")],
+)
+def toggle_help(n, is_open):
+    if n:
+        return not is_open
+    return is_open
+
+@app.callback(
+    Output({"type": "collapse", "index": dash.dependencies.MATCH}, "is_open"),
+    Input({"type": "collapse-button", "index": dash.dependencies.MATCH}, "n_clicks"),
+    State({"type": "collapse", "index": dash.dependencies.MATCH}, "is_open"),
+)
+def toggle_collapse(n, is_open):
+    if n:
+        return not is_open
+    return is_open
+
+@app.callback(
+    Output("download-data", "data"),
+    [Input({"type": "btn-csv", "index": dash.dependencies.ALL}, "n_clicks"),
+     Input({"type": "btn-json", "index": dash.dependencies.ALL}, "n_clicks")],
+    [State({"type": "chart-data", "index": dash.dependencies.ALL}, "data")],
+    prevent_initial_call=True
+)
+def download_chart_data(csv_clicks, json_clicks, all_data):
+    if not any(csv_clicks + json_clicks):
+        return dash.no_update
+    
+    # Identify which button was clicked
+    triggered_id = ctx.triggered_id
+    if not triggered_id:
+        return dash.no_update
+    
+    # triggered_id is a dict like {'index': 123, 'type': 'btn-csv'}
+    btn_index = triggered_id['index']
+    btn_type = triggered_id['type']
+    
+    # Find the data corresponding to this index
+    # Note: State ALL returns a list. We need to find the one matching the triggered index.
+    # Since we use Store with the same index, we can usectx.inputs_list or just find it.
+    
+    # Using ctx.inputs_list is more direct but let's be robust
+    data_to_download = None
+    # inputs_list is only for Inputs. We need States.
+    # We can use the triggered index to find it in the States list if we know the order, 
+    # but ALL might not guarantee order matching triggered_id's index perfectly if elements were removed/added.
+    # Actually, ALL returns values in order of the components in the layout.
+    
+    # A better way: Use ctx.states to find the value for that specific index
+    for state_id_str, value in ctx.states.items():
+        if f'"index":{btn_index}' in state_id_str and "chart-data" in state_id_str:
+            data_to_download = value
+            break
+            
+    if not data_to_download:
+        return dash.no_update
+        
+    df = pd.DataFrame(data_to_download)
+    
+    if "btn-csv" in btn_type:
+        return dcc.send_data_frame(df.to_csv, f"rappi_data_{btn_index}.csv", index=False)
+    else:
+        return dcc.send_data_frame(df.to_json, f"rappi_data_{btn_index}.json", orient="records")
 
 def parse_chart_spec_from_text(text):
     """Fallback: extraction of JSON chart spec from agent markdown text or raw text."""
@@ -200,7 +350,7 @@ def try_parse_natural_language_data(data_str):
         return None
 
 def create_plotly_figure(spec):
-    """Transforms a JSON spec into a Plotly figure."""
+    """Transforms a JSON spec into a Plotly figure and returns (fig, df)."""
     try:
         # Unwrap nested spec if present (sometimes happens with Pydantic tool arguments)
         if isinstance(spec, dict) and "spec" in spec and len(spec) == 1:
@@ -215,7 +365,7 @@ def create_plotly_figure(spec):
 
         if not chart_type:
             logger.warning(f"No chart type found in spec: {spec}")
-            return None
+            return None, None
 
         # Data handling
         df = None
@@ -238,7 +388,28 @@ def create_plotly_figure(spec):
 
         if df is None or df.empty:
             logger.error(f"Failed to parse data for chart: {data_raw}")
-            return None
+            return None, None
+
+        # Clean up column names for better display
+        rename_mapping = {
+            "WEEK": "Semana",
+            "VALUE": "Valor",
+            "METRIC": "Métrica",
+            "COUNTRY": "País",
+            "CITY": "Ciudad",
+            "ZONE": "Zona",
+            "ZONE_TYPE": "Tipo de Zona",
+            "ZONE_PRIORITIZATION": "Prioridad de Zona",
+            "WEEK_NUM": "Nro. de Semana"
+        }
+        df = df.rename(columns=rename_mapping)
+
+        # Update x_col and y_cols to match the new Spanish column names
+        if x_col in rename_mapping:
+            x_col = rename_mapping[x_col]
+        
+        if y_cols:
+            y_cols = [rename_mapping.get(c, c) for c in y_cols]
 
         # Determine default X and Y if not provided or to ensure numeric consistency
         if not x_col or x_col not in df.columns:
@@ -254,21 +425,34 @@ def create_plotly_figure(spec):
             # Ensure provided y_cols exist in df
             y_cols = [c for c in y_cols if c in df.columns]
 
+        # Standardize legend labels
+        labels = {
+            "variable": "Métrica / Categoría",
+            "value": "Valor"
+        }
+
         if chart_type == "line":
-            fig = px.line(df, x=x_col, y=y_cols, title=title, markers=True)
+            fig = px.line(df, x=x_col, y=y_cols, title=title, markers=True, labels=labels)
         elif chart_type == "bar":
-            fig = px.bar(df, x=x_col, y=y_cols, title=title)
+            fig = px.bar(df, x=x_col, y=y_cols, title=title, labels=labels)
         elif chart_type == "scatter":
-            fig = px.scatter(df, x=x_col, y=y_cols, title=title)
+            fig = px.scatter(df, x=x_col, y=y_cols, title=title, labels=labels)
         else:
             logger.warning(f"Unsupported chart type: {chart_type}")
-            return None
+            return None, None
         
-        fig.update_layout(template="plotly_white")
-        return fig
+        fig.update_layout(
+            template="plotly_white",
+            margin=dict(l=40, r=40, t=60, b=40),
+            font=dict(family="Inter, sans-serif"),
+            legend_title_text="Categoría"
+        )
+        return fig, df
     except Exception as e:
         logger.error(f"Failed to create figure: {e}", exc_info=True)
-        return None
+        return None, None
+
+import time
 
 @app.callback(
     [Output("chat-component", "messages"),
@@ -276,11 +460,27 @@ def create_plotly_figure(spec):
     Input("chat-component", "new_message"),
     [State("chat-component", "messages"),
      State("viz-container", "children")],
-    prevent_initial_call=True
 )
 def update_chat(new_message, current_messages, current_viz_list):
+    # Initialization logic: if no messages and no new_message, provide greeting
+    if not current_messages and not new_message:
+        return [
+            {
+                "role": "assistant", 
+                "content": """¡Hola! Soy tu asistente de Inteligencia Operacional de Rappi. Puedo ayudarte a analizar métricas de negocio, visualizar tendencias y responder preguntas sobre la operación.
+
+**Ejemplos de lo que puedes preguntarme:**
+* **Filtrado:** *'¿Cuáles son las 5 zonas con mayor % Lead Penetration esta semana?'*
+* **Comparaciones:** *'Compara el Perfect Order entre zonas Wealthy y Non Wealthy en México'*
+* **Tendencias:** *'Muestra la evolución de Gross Profit UE en Chapinero últimas 8 semanas'*
+* **Agregaciones:** *'¿Cuál es el promedio de Lead Penetration por país?'*
+* **Multivariable:** *'¿Qué zonas tienen alto Lead Penetration pero bajo Perfect Order?'*
+* **Inferencia:** *'¿Cuáles son las zonas que más crecen en órdenes en las últimas 5 semanas y qué podría explicar el crecimiento?'*"""
+            }
+        ], current_viz_list
+
     if not new_message:
-        return current_messages, current_viz_list
+        return dash.no_update, dash.no_update
 
     user_query = new_message.get("content")
     if not user_query:
@@ -360,15 +560,46 @@ def update_chat(new_message, current_messages, current_viz_list):
     
     if chart_spec:
         logger.info(f"Creating chart for side panel...")
-        fig = create_plotly_figure(chart_spec)
-        if fig:
-            # Create a new card for the plot to keep them distinct in the scrollable list
+        fig, df = create_plotly_figure(chart_spec)
+        if fig is not None:
+            chart_id = int(time.time() * 1000)
+            # Create a new card for the plot with data table and download buttons
             new_plot_card = dbc.Card([
                 dbc.CardBody([
-                    dcc.Graph(figure=fig, config={'displayModeBar': False})
+                    dcc.Graph(figure=fig, config={'displayModeBar': False}),
+                    html.Hr(),
+                    html.Div([
+                        dbc.Button(
+                            "Ver Tabla de Datos",
+                            id={"type": "collapse-button", "index": chart_id},
+                            className="btn-outline-rappi",
+                            size="sm",
+                        ),
+                    ], className="d-grid gap-2"),
+                    dbc.Collapse(
+                        dbc.Card([
+                            dbc.CardBody([
+                                dash_table.DataTable(
+                                    data=df.to_dict('records'),
+                                    columns=[{"name": i, "id": i} for i in df.columns],
+                                    page_size=5,
+                                    style_table={'overflowX': 'auto'},
+                                    style_cell={'textAlign': 'left', 'fontFamily': 'Inter, sans-serif', 'fontSize': '12px'},
+                                    style_header={'fontWeight': 'bold', 'backgroundColor': '#f8f9fa'}
+                                ),
+                                html.Div([
+                                    dbc.Button("CSV", id={"type": "btn-csv", "index": chart_id}, className="btn-rappi mt-2 me-2", size="sm"),
+                                    dbc.Button("JSON", id={"type": "btn-json", "index": chart_id}, className="btn-rappi mt-2", size="sm"),
+                                ], className="d-flex justify-content-end")
+                            ])
+                        ], className="mt-2 border-0 bg-light"),
+                        id={"type": "collapse", "index": chart_id},
+                        is_open=False,
+                    ),
+                    dcc.Store(id={"type": "chart-data", "index": chart_id}, data=df.to_dict('records'))
                 ])
             ], className="mb-3 shadow-sm")
-            # Prepend the new plot to keep the newest on top (carrousel-like behavior)
+            # Prepend the new plot
             current_viz_list = [new_plot_card] + current_viz_list
 
     # 4. Final UI Cleanup
