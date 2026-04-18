@@ -179,4 +179,5 @@ outputs/
 temp/
 
 # In case there's an autosave file for consigna.docx
-docs/~$nsigna.docx
+docs/~$nsigna.docxmlflow.db
+mlruns/

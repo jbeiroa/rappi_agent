@@ -1,71 +1,40 @@
 # Especificaciones Técnicas: Agente de Operaciones Inteligentes Rappi
 
 ## 1. Descripción del Proyecto
-Este proyecto tiene como objetivo construir un sistema de IA multi-agente de alto rendimiento para democratizar el acceso a los datos de los equipos de Strategy, Planning & Analytics (SP&A) de Rappi. El sistema permitirá a los usuarios realizar consultas sobre métricas operacionales en lenguaje natural y recibir tanto insights textuales como visualizaciones interactivas.
+Este sistema es una solución de IA multi-agente diseñada para potenciar la toma de decisiones estratégica en Rappi. Combina el procesamiento de lenguaje natural (NLP) con modelos de Machine Learning para analizar métricas operacionales, detectar anomalías y generar reportes ejecutivos automatizados.
 
-## 2. Arquitectura del Sistema (Sistema Multi-Agente)
-Utilizando el **Google Agent Development Kit (ADK)**, el sistema está estructurado jerárquicamente:
+## 2. Arquitectura del Sistema
+El sistema utiliza una estructura jerárquica basada en el **Google Agent Development Kit (ADK)** y una capa de persistencia para el tracking de modelos.
 
-### 2.1 Agente Root (La Interfaz)
-- **Rol:** Punto de entrada para todas las interacciones del usuario.
-- **Funciones Clave:**
-    - Guardrails de entrada (asegurando que las consultas estén relacionadas con el negocio).
-    - Gestión de sesiones y memoria.
-    - Detección de intención (Consulta General vs. Análisis Detallado vs. Generación de Reportes).
-- **Herramientas:** Almacén de memoria, Enrutador.
+### 2.1 Jerarquía de Agentes
+1.  **Root Agent (Gateway)**: Punto de entrada único. Gestiona guardrails, memoria de sesión y delega al Orquestador.
+2.  **Orchestrator Agent**: Descompone consultas complejas en planes de acción y coordina la ejecución entre analistas y visualizadores.
+3.  **Data Analyst Agent**: Traduce lenguaje natural a consultas de Pandas. Utiliza un entorno de ejecución seguro para procesar el dataframe enriquecido.
+4.  **Data Visualizer Agent**: Genera especificaciones de Plotly para renderizar gráficos interactivos en el frontend.
+5.  **Report Agent**: Especializado en análisis estratégico; procesa hallazgos técnicos (ML/Stats) para redactar el reporte ejecutivo.
 
-### 2.2 Agente Orquestador (El Planificador)
-- **Rol:** Razonamiento de alto nivel y delegación de tareas.
-- **Funciones Clave:**
-    - Descomponer consultas complejas (ej., "Compara X e Y" -> 1. Obtener X, 2. Obtener Y, 3. Comparar).
-    - Gestionar el flujo de información entre sub-agentes especializados.
-- **Herramientas:** Planificador, Registro de sub-agentes.
+### 2.2 Pipeline de Machine Learning e Inteligencia
+- **Motor de Anomalías**: Implementación de `IsolationForest` para detección de outliers multivariables.
+- **Tracking (MLflow)**: Registro local de experimentos, hiperparámetros y modelos utilizando un backend SQLite (`mlflow.db`).
+- **Lógica de Deterioro**: Algoritmos de ventana deslizante para detectar caídas consecutivas de rendimiento.
 
-### 2.3 Sub-Agentes Especializados
-1.  **Agente Analista de Datos:**
-    - **Capacidad:** Experto en Python/Pandas.
-    - **Tarea:** Escribir y ejecutar código para filtrar, agregar y analizar el archivo `dummy_data.xlsx`.
-    - **Contexto:** Conocimiento del Diccionario de Datos (Lead Penetration, Gross Profit UE, etc.).
-2.  **Agente Visualizador de Datos:**
-    - **Capacidad:** Especialista en Plotly.
-    - **Tarea:** Transformar los resultados de JSON/DataFrame en gráficos interactivos (Líneas, Barras, Dispersión).
-3.  **Agente de Sugerencias:**
-    - **Capacidad:** Generador Proactivo de Insights.
-    - **Tarea:** Realizar comprobaciones en segundo plano para detectar anomalías o correlaciones interesantes relacionadas con la consulta del usuario.
+## 3. Flujo de Datos
+- **Fuente**: `data/dummy_data.xlsx`.
+- **Carga y Enriquecimiento**: Los datos se cargan en memoria y se enriquecen con cálculos de cambio porcentual WoW, flags de anomalías y promedios por tipo de zona para benchmarking.
+- **Estado Compartido**: Uso de un singleton en `shared_state.py` para asegurar que todos los agentes trabajen sobre la misma versión de los datos enriquecidos.
 
-## 3. Diccionario de Datos y Fuentes
-- **Archivo Fuente:** `data/dummy_data.xlsx`
-- **Datasets:**
-    - **Metrics Input:** Métricas operacionales (Lead Penetration, Perfect Order, etc.) por País/Ciudad/Zona/Tipo/Prioridad para las semanas L8W a L0W.
-    - **Orders:** Volumen transaccional por zona para las semanas L8W a L0W.
-- **Definiciones de Métricas:** (Según el documento de consigna, ej., *Perfect Order* = Pedidos sin cancelaciones, defectos o retrasos / Pedidos Totales).
+## 4. Tecnologías Core
+- **Framework de Agentes**: Google ADK.
+- **Modelos de Lenguaje**: Gemini 3 Flash.
+- **Visualización**: Plotly Dash & Plotly.py.
+- **Backend de ML**: Scikit-Learn & MLflow.
+- **Gestión de Paquetes**: `uv`.
 
-## 4. Stack Tecnológico y Estándares de Ingeniería
-- **Entorno:** Python 3.12+ gestionado por `uv`.
-- **Capa de LLM:** `LiteLLM` para una implementación agnóstica del modelo (Predeterminado: `gemini-3-flash-preview`).
-- **Interfaz de Usuario:** `Plotly Dash` para una interfaz de tablero profesional centrada en los datos.
-- **Pruebas:** `pytest` para una cobertura completa de unidades e integración.
-- **Documentación:** Docstrings estilo Google y registros de proyecto en formato Markdown.
+## 5. Capacidades Operacionales
+- **Consultas Ad-hoc**: Preguntas sobre cualquier métrica o zona geográfica.
+- **Análisis de Tendencias**: Detección visual y textual de evolución temporal.
+- **Reportes Bajo Demanda**: Generación de reportes ejecutivos en HTML con recomendaciones estratégicas.
+- **Exportación**: Descarga directa de datos filtrados en formatos CSV y JSON.
 
-## 5. Hoja de Ruta de Implementación
-### Fase 1: Base y Datos
-- Configuración del entorno con `uv`.
-- Módulo de carga y limpieza de datos.
-- Validación de cálculos de métricas.
-
-### Fase 2: Chatbot Principal (Multi-Agente)
-- Implementación de los agentes Root y Orquestador.
-- Definición de herramientas para el Analista de Datos (sandbox de Pandas).
-- Integración de LiteLLM.
-
-### Fase 3: Visualización e Interfaz de Usuario
-- Implementación del agente Visualizador de Datos.
-- Desarrollo de la interfaz Dash (Ventana de chat + Panel lateral para gráficos).
-
-### Fase 4: Insights Automáticos
-- Lógica para detección de anomalías y análisis de tendencias.
-- Módulo de generación de reportes ejecutivos (Markdown).
-
-### Fase 5: Refinamiento y Demo
-- Optimización del rendimiento.
-- Preparación de los 5 casos de demo.
+---
+*Documentación técnica finalizada para el proceso de selección de Rappi.*

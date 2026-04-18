@@ -13,6 +13,10 @@ ESTRUCTURA DEL DATAFRAME (df):
 - WEEK: [L8W, L7W... L0W]
 - VALUE: Float
 - WEEK_NUM: Entero (0 = semana actual, 8 = hace 8 semanas)
+- WOW_CHANGE: Cambio porcentual respecto a la semana anterior.
+- IS_ANOMALY: Booleano (True si el modelo ML IsolationForest detectó una anomalía).
+- WORRYING_METRIC: Booleano (True si hay deterioro constante por 3+ semanas).
+- PCT_DIFF_FROM_TYPE_AVG: Diferencia porcentual respecto al promedio de zonas del mismo tipo.
 
 MÉTRICAS DISPONIBLES:
 'Retail SST > SS CVR', 'Restaurants SST > SS CVR', 'Gross Profit UE', 
